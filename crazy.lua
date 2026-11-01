@@ -1,5 +1,5 @@
 -- ==========================================================
--- Anime Adventures Monitor - Captura de Moedas + Portais
+-- Anime Adventures Monitor - Cache Inteligente (Lobby/Partida)
 -- ==========================================================
 
 local HttpService = game:GetService("HttpService")
@@ -9,11 +9,20 @@ local CoreGui = game:GetService("CoreGui")
 
 local API_ENDPOINT = "http://localhost:3000/api/update"
 local SECRET_KEY = "AA_Panel_Secr3t_Key_2026!#$@"
-local INTERVALO_SEGUNDOS = 15
+local INTERVALO_SEGUNDOS = 60 -- Atualiza a cada 1 minuto
 
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
 if not httpRequest then return end
+
+-- Variáveis para guardar o último estado válido quando estiver em partida
+local ultimoValido = {
+    gems = 0,
+    dices = 0,
+    traitRerolls = 0,
+    summerGems = 0,
+    skyPortals = 0
+}
 
 -- Criar Caixinha Visual de Status
 local screenGui = CoreGui:FindFirstChild("AAPanelMonitorUI") or Instance.new("ScreenGui")
@@ -37,7 +46,7 @@ local title = frame:FindFirstChild("Title") or Instance.new("TextLabel")
 title.Name = "Title"
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "📊 AA Monitor - Full Stats"
+title.Text = "📊 AA Monitor - Cache Ativo"
 title.TextColor3 = Color3.fromRGB(56, 189, 248)
 title.TextSize = 13
 title.Font = Enum.Font.SourceSansBold
@@ -127,14 +136,32 @@ local function getPlayerStats()
         end
     end
 
+    -- PROTEÇÃO CONTRA ZERAR EM PARTIDA:
+    -- Se encontrou valores válidos (Gems > 0), atualiza o cache. 
+    -- Se estiver em partida e vier 0, mantém o último valor que estava no cache.
+    if gems > 0 then
+        ultimoValido.gems = gems
+        if dices > 0 then ultimoValido.dices = dices end
+        if traitRerolls > 0 then ultimoValido.traitRerolls = traitRerolls end
+        if summerGems > 0 then ultimoValido.summerGems = summerGems end
+        if skyPortals > 0 then ultimoValido.skyPortals = skyPortals end
+    end
+
+    -- Retorna os dados atuais ou os em cache se estiver em partida
+    local finalGems = (gems > 0) and gems or ultimoValido.gems
+    local finalDices = (dices > 0) and dices or ultimoValido.dices
+    local finalRerolls = (traitRerolls > 0) and traitRerolls or ultimoValido.traitRerolls
+    local finalSummer = (summerGems > 0) and summerGems or ultimoValido.summerGems
+    local finalPortals = (skyPortals > 0) and skyPortals or ultimoValido.skyPortals
+
     return {
         username = LocalPlayer.Name,
         userId = LocalPlayer.UserId,
-        gems = gems,
-        dices = dices,
-        traitRerolls = traitRerolls,
-        summerGems = summerGems,
-        skyPortals = skyPortals,
+        gems = finalGems,
+        dices = finalDices,
+        traitRerolls = finalRerolls,
+        summerGems = finalSummer,
+        skyPortals = finalPortals,
         jobId = game.JobId,
         placeId = game.PlaceId,
         timestamp = os.time()
@@ -161,7 +188,7 @@ local function sendDataToDashboard()
         })
     end)
 
-    statusLabel.Text = string.format("Gems: %d | Remnant: %d\nSummer: %d | Sky Portals: %d\nStatus: 🟢 Sincronizado!", data.gems, data.traitRerolls, data.summerGems, data.skyPortals)
+    statusLabel.Text = string.format("Gems: %d | Remnant: %d\nSummer: %d | Portals: %d\nStatus: 🟢 Cache Ativo (1m)", data.gems, data.traitRerolls, data.summerGems, data.skyPortals)
 end
 
 task.spawn(function()
