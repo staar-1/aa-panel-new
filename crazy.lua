@@ -1,5 +1,5 @@
 -- ==========================================================
--- Anime Adventures Monitor - Correção de Leitura de Recursos
+-- Anime Adventures Monitor - Leitor Direto da Interface (UI)
 -- ==========================================================
 
 local HttpService = game:GetService("HttpService")
@@ -18,7 +18,7 @@ if not httpRequest then
     return
 end
 
--- Criar Caixinha Visual
+-- Criar Caixinha Visual de Status
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AAPanelMonitorUI"
 screenGui.Parent = CoreGui
@@ -37,7 +37,7 @@ corner.Parent = frame
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 30)
 title.BackgroundTransparency = 1
-title.Text = "📊 AA Monitor - Ativo"
+title.Text = "📊 AA Monitor - UI Reader"
 title.TextColor3 = Color3.fromRGB(56, 189, 248)
 title.TextSize = 13
 title.Font = Enum.Font.SourceSansBold
@@ -47,7 +47,7 @@ local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, -20, 0, 70)
 statusLabel.Position = UDim2.new(0, 10, 0, 30)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Lendo recursos..."
+statusLabel.Text = "Lendo interface..."
 statusLabel.TextColor3 = Color3.fromRGB(248, 250, 252)
 statusLabel.TextSize = 11
 statusLabel.Font = Enum.Font.SourceSans
@@ -56,34 +56,38 @@ statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.TextYAlignment = Enum.TextYAlignment.Top
 statusLabel.Parent = frame
 
+-- Função para limpar e extrair apenas números do texto da UI
+local function extractNumber(text)
+    if not text then return 0 end
+    local cleanText = text:gsub("[^%d]", "")
+    return tonumber(cleanText) or 0
+end
+
 local function getPlayerStats()
-    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
-    
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     local gems = 0
     local dices = 0
     local traitRerolls = 0
     local summerGems = 0
 
-    if leaderstats then
-        for _, v in ipairs(leaderstats:GetChildren()) do
-            local name = v.Name:lower()
-            local val = tonumber(v.Value) or 0
-            
-            -- Imprime no F9 para termos certeza absoluta do nome exato
-            print("[AA DEBUG] Item encontrado -> Nome:", v.Name, "| Valor:", val)
-
-            if name:find("gem") and not name:find("summer") and not name:find("pearl") then
-                gems = val
-            elseif name:find("summer") or name:find("pearl") or name:find("event") then
-                summerGems = val
-            elseif name:find("dice") or name:find("dados") then
-                dices = val
-            elseif name:find("reroll") or name:find("trait") then
-                traitRerolls = val
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetDescendants()) do
+            if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+                local parentName = gui.Parent and gui.Parent.Name:lower() or ""
+                local textVal = gui.Text or ""
+                
+                -- Varredura por contexto nos nomes dos elementos da interface
+                if parentName:find("gem") and gems == 0 then
+                    gems = extractNumber(textVal)
+                elseif (parentName:find("summer") or parentName:find("pearl")) and summerGems == 0 then
+                    summerGems = extractNumber(textVal)
+                elseif parentName:find("dice") and dices == 0 then
+                    dices = extractNumber(textVal)
+                elseif (parentName:find("reroll") or parentName:find("trait")) and traitRerolls == 0 then
+                    traitRerolls = extractNumber(textVal)
+                end
             end
         end
-    else
-        warn("[AA DEBUG] Pasta leaderstats não encontrada!")
     end
 
     return {
