@@ -1,17 +1,17 @@
 -- ==========================================================
--- Anime Adventures Account Monitor Script
+-- Anime Adventures Account Monitor Script + UI In-Game
 -- ==========================================================
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
 
 -- Configurações do seu Painel / Servidor
 local API_ENDPOINT = "http://localhost:3000/api/update"
 local SECRET_KEY = "AA_Panel_Secr3t_Key_2026!#$@"
-local INTERVALO_SEGUNDOS = 30
+local INTERVALO_SEGUNDOS = 15
 
--- Função para identificar a função de requisição do executor (compatibilidade)
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
 if not httpRequest then
@@ -19,22 +19,61 @@ if not httpRequest then
     return
 end
 
--- Função para buscar valores dos recursos no Anime Adventures
+-- ==========================================================
+-- CRIAR INTERVISUALIZAÇÃO (UI) DENTRO DO JOGO
+-- ==========================================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AAPanelMonitorUI"
+screenGui.Parent = CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 220, 0, 90)
+frame.Position = UDim2.new(0, 20, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundTransparency = 1
+title.Text = "📊 AA Monitor Status"
+title.TextColor3 = Color3.fromRGB(56, 189, 248)
+title.TextSize = 14
+title.Font = Enum.Font.SourceSansBold
+title.Parent = frame
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 45)
+statusLabel.Position = UDim2.new(0, 10, 0, 35)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Iniciando monitoramento..."
+statusLabel.TextColor3 = Color3.fromRGB(248, 250, 252)
+statusLabel.TextSize = 12
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.TextWrapped = true
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+statusLabel.Parent = frame
+
+-- ==========================================================
+-- FUNÇÃO DE COLETA E ENVIO
+-- ==========================================================
 local function getPlayerStats()
     local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 
-    -- 1. Valores do Leaderstats (Padrão)
     local gems = leaderstats and leaderstats:FindFirstChild("Gems") and leaderstats.Gems.Value or 0
     local dices = leaderstats and leaderstats:FindFirstChild("Dices") and leaderstats.Dices.Value or 0
     local traitRerolls = leaderstats and leaderstats:FindFirstChild("TraitRerolls") and leaderstats.TraitRerolls.Value or 0
 
-    -- 2. Tentar buscar Summer Gems / Event Gems na Interface (UI) caso não esteja no leaderstats
     local summerGems = 0
     if leaderstats and leaderstats:FindFirstChild("SummerGems") then
         summerGems = leaderstats.SummerGems.Value
     elseif playerGui and playerGui:FindFirstChild("MainUI") then
-        -- Exemplo de fallback buscando direto na UI se o evento utilizar elemento visual
         local summerCurrencyLabel = playerGui.MainUI:FindFirstChild("SummerCurrency", true)
         if summerCurrencyLabel and summerCurrencyLabel:IsA("TextLabel") then
             summerGems = tonumber((summerCurrencyLabel.Text:gsub("%D+", ""))) or 0
@@ -54,12 +93,19 @@ local function getPlayerStats()
     }
 end
 
--- Função para enviar os dados via POST
 local function sendDataToDashboard()
     local data = getPlayerStats()
-    local payload = HttpService:JSONEncode(data)
+    local success, payload = pcall(function()
+        return HttpService:JSONEncode(data)
+    end)
 
-    local success, response = pcall(function()
+    if not success then
+        statusLabel.Text = "Status: Erro ao codificar JSON"
+        statusLabel.TextColor3 = Color3.fromRGB(248, 113, 113)
+        return
+    end
+
+    local reqSuccess, response = pcall(function()
         return httpRequest({
             Url = API_ENDPOINT,
             Method = "POST",
@@ -71,23 +117,16 @@ local function sendDataToDashboard()
         })
     end)
 
-    if success then
-        print("[ Painel Bot ] Dados enviados com sucesso para " .. LocalPlayer.Name)
+    if reqSuccess then
+        statusLabel.Text = "Status: 🟢 Enviado com sucesso!\nGems: " .. data.gems
+        statusLabel.TextColor3 = Color3.fromRGB(74, 222, 128)
     else
-        warn("[ Painel Bot ] Erro ao enviar dados:", response)
+        statusLabel.Text = "Status: 🔴 Erro de conexão com API"
+        statusLabel.TextColor3 = Color3.fromRGB(248, 113, 113)
     end
 end
 
--- Notificação na tela confirmando que o monitor foi carregado
-pcall(function()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Painel Monitor",
-        Text = "Script de monitoramento ativado!",
-        Duration = 5
-    })
-end)
-
--- Loop Infinito executando em Thread separada
+-- Executar em loop
 task.spawn(function()
     while true do
         sendDataToDashboard()
